@@ -7,3 +7,7 @@
 2) Install all dependencies required in the script using the following command:
 
 `pip install -r requirements.txt`
+
+3) Execute the program by running the following command:
+
+`python main.py`
