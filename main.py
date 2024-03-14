@@ -30,7 +30,6 @@ def convert_audio(input_file, output_file):
     print(f"Conversion successful. File saved as {output_file}")
 
 
-"""
 ## Convert files to .wav
 print("Starting converting files to .wav format")
 for speaker_type in SPEAKER_TYPES:
@@ -41,9 +40,12 @@ for speaker_type in SPEAKER_TYPES:
             out_path = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + WAV])
             convert_audio(in_path, out_path)
 print("Finished converting files to .wav format")
-"""
 
-## Get fundamental frequency for each speaker's passage
+
+"""
+TODO:   Get average difference in fundamental frequency between AI and 
+        real voice for each speaker
+"""
 print("Starting yin pitch detection")
 for passage in PASSAGES:
     for speaker in SPEAKERS:
