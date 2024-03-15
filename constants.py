@@ -1,4 +1,7 @@
 AUDIO_DIR_NAME = "audio"
+PLOTS_DIR_NAME = "plots"
+STATS_DIR_NAME = "stats"
+
 WAV = ".wav"
 
 AI = "ai"
@@ -12,8 +15,8 @@ SPEAKER_TYPES = [
 SPEAKERS = [
     "female_speaker_1",
     "female_speaker_2",
-    ## "male_speaker_1",
-    ## "male_speaker_2"
+    "male_speaker_1",
+    "male_speaker_2"
 ]
 
 PASSAGES = [
