@@ -1,4 +1,6 @@
 pydub
 matplotlib
 numpy
-scipy
+librosa
+pandas
+tabulate
