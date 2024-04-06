@@ -186,22 +186,21 @@ for passage_num, passage in enumerate(PASSAGE_NAMES):
             # Get duration of speaker reading passage (in seconds)
             audio_file = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + WAV])
             duration = librosa.get_duration(filename=audio_file)
-            duration_minutes = duration
 
-            # Compute syllables per minute (spm)
-            spm = total_syllables / duration_minutes
-
+            # Compute syllables per second (sps)
+            sps = total_syllables / duration
 
             # Add row to spm_df
             new_row = pd.DataFrame({
                 'passage': [passage],
                 'speaker': [speaker],
                 'type': [speaker_type],
-                'sps': [spm]
+                'sps': [sps]
             })
 
             spm_df = pd.concat([spm_df, new_row], ignore_index=True)
 
+# Save syllables per second data to file
 file_name = "sps_speaker_stats"
 file_path = "/".join([STATS_DIR_NAME, file_name])
 with open(file_path, 'w') as file:
