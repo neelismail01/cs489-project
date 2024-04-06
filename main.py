@@ -2,12 +2,14 @@ import librosa
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pydub import AudioSegment
+from pydub import AudioSegment, silence
+import syllapy
 from tabulate import tabulate
 
 from constants import (
     AI,
     AUDIO_DIR_NAME,
+    PASSAGE_NAMES,
     PASSAGES,
     PLOTS_DIR_NAME,
     REAL,
@@ -29,15 +31,30 @@ def convert_audio(input_file, output_file):
     else:
         raise ValueError("Unsupported format. Please use MP3 or M4A files.")
 
+    non_silence_chunks = silence.detect_nonsilent(
+        audio,
+        min_silence_len=10,
+        silence_thresh=-40
+    )
+
+    # Find the start and end of the speech
+    start_time = non_silence_chunks[0][0] if non_silence_chunks else 0
+    end_time = non_silence_chunks[-1][1] if non_silence_chunks else len(audio)
+
+    print(input_file, start_time)
+
+    # Clip the audio
+    clipped_audio = audio[start_time:end_time]
+
     # Export the audio file in WAV format
-    audio.export(output_file, format='wav')
+    clipped_audio.export(output_file, format='wav')
     print(f"Conversion successful. File saved as {output_file}")
 
 # Convert files to .wav
 print("Starting converting files to .wav format")
 for speaker_type in SPEAKER_TYPES:
     for speaker in SPEAKERS:
-        for passage in PASSAGES:
+        for passage in PASSAGE_NAMES:
             ext = ".mp3" if speaker_type == AI else ".m4a"
             in_path = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + ext])
             out_path = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + WAV])
@@ -46,15 +63,15 @@ print("Finished converting files to .wav format")
 
 
 print("Starting yin pitch detection")
-data_df = pd.DataFrame(columns=['passage', 'speaker', 'type', 'f0', 'prob'])
-for passage in PASSAGES:
+audio_samples_df = pd.DataFrame(columns=['passage', 'speaker', 'type', 'f0', 'prob'])
+for passage in PASSAGE_NAMES:
     for speaker in SPEAKERS:
         for speaker_type in SPEAKER_TYPES:
             audio_file = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + WAV])
             y, sr = librosa.load(audio_file)
             f0, _, prob = librosa.pyin(
                 y,
-                fmin= 125 if "female" in speaker else 80,
+                fmin=125 if "female" in speaker else 80,
                 fmax=350 if "female" in speaker else 200
             )
             rows = pd.DataFrame({
@@ -64,22 +81,22 @@ for passage in PASSAGES:
                 'f0': f0,
                 'prob': prob
             })
-            data_df = pd.concat([data_df, rows], ignore_index=True)
-            data_df = data_df.dropna(subset=['f0'])
-            data_df = data_df[data_df['prob'] >= 0.8]
+            audio_samples_df = pd.concat([audio_samples_df, rows], ignore_index=True)
+            audio_samples_df = audio_samples_df.dropna(subset=['f0'])
+            audio_samples_df = audio_samples_df[audio_samples_df['prob'] >= 0.8]
 print("Finished yin pitch detection")
 
 print("Starting pitch distribution graphs and statistics")
-stats_df = pd.DataFrame(columns=[
-    'passage', 'speaker', 'type', 'mean_f0', 'std_dev_f0', 'min_f0', 'max_f0', 'range_f0'
+pitch_stats_df = pd.DataFrame(columns=[
+    'passage', 'speaker', 'type', 'mean', 'std_dev', 'min', 'max', 'range'
 ])
-for passage in PASSAGES:
+for passage in PASSAGE_NAMES:
     for speaker in SPEAKERS:
         # Get ai and real data for speaker's recording of passage
-        ai_df = data_df.query(
+        ai_df = audio_samples_df.query(
             f'(passage == "{passage}") & (speaker == "{speaker}") & (type == "{AI}")'
         )
-        real_df = data_df.query(
+        real_df = audio_samples_df.query(
             f'(passage == "{passage}") & (speaker == "{speaker}") & (type == "{REAL}")'
         )
 
@@ -101,19 +118,19 @@ for passage in PASSAGES:
             }
         }
 
-        # Add data to stats_df
+        # Add data to pitch_stats_df
         for speaker_type in SPEAKER_TYPES:
             rows = pd.DataFrame({
                 'passage': [passage],
                 'speaker': [speaker],
                 'type': [speaker_type],
-                'mean_f0': [stats[speaker_type]["mean"]],
-                'std_dev_f0': [stats[speaker_type]["std_dev"]],
-                'min_f0': [stats[speaker_type]["min"]],
-                'max_f0': [stats[speaker_type]["max"]],
-                'range_f0': [stats[speaker_type]["range"]]
+                'mean': [stats[speaker_type]["mean"]],
+                'std_dev': [stats[speaker_type]["std_dev"]],
+                'min': [stats[speaker_type]["min"]],
+                'max': [stats[speaker_type]["max"]],
+                'range': [stats[speaker_type]["range"]]
             })
-            stats_df = pd.concat([stats_df, rows], ignore_index=True)
+            pitch_stats_df = pd.concat([pitch_stats_df, rows], ignore_index=True)
 
         # Create pdf graphs
         x_min = min(ai_df['f0'].min(), real_df['f0'].min())
@@ -146,13 +163,48 @@ for passage in PASSAGES:
         file_path = "/".join([PLOTS_DIR_NAME, file_name])
         plt.savefig(file_path)
 
-## Write stats_df to file
-file_name = "speaker_stats"
+## Write pitch_stats_df to file
+file_name = "pitch_speaker_stats"
 file_path = "/".join([STATS_DIR_NAME, file_name])
 with open(file_path, 'w') as file:
-    table_string = tabulate(stats_df, headers='keys', tablefmt='plain', showindex=False)
+    table_string = tabulate(pitch_stats_df, headers='keys', tablefmt='plain', showindex=False)
     file.write(table_string)
-
 print("Finished pitch distribution graphs and statistics")
 
 
+print("Starting syllables per second calculation")
+spm_df = pd.DataFrame(columns=[
+    'passage', 'speaker', 'type', 'sps'
+])
+for passage_num, passage in enumerate(PASSAGE_NAMES):
+    for speaker in SPEAKERS:
+        for speaker_type in SPEAKER_TYPES:
+            # Count syllables in passage
+            passage_text = PASSAGES[passage_num]
+            total_syllables = syllapy.count(passage_text)
+
+            # Get duration of speaker reading passage (in seconds)
+            audio_file = "/".join([AUDIO_DIR_NAME, speaker_type, speaker, passage + WAV])
+            duration = librosa.get_duration(filename=audio_file)
+            duration_minutes = duration
+
+            # Compute syllables per minute (spm)
+            spm = total_syllables / duration_minutes
+
+
+            # Add row to spm_df
+            new_row = pd.DataFrame({
+                'passage': [passage],
+                'speaker': [speaker],
+                'type': [speaker_type],
+                'sps': [spm]
+            })
+
+            spm_df = pd.concat([spm_df, new_row], ignore_index=True)
+
+file_name = "sps_speaker_stats"
+file_path = "/".join([STATS_DIR_NAME, file_name])
+with open(file_path, 'w') as file:
+    table_string = tabulate(spm_df, headers='keys', tablefmt='plain', showindex=False)
+    file.write(table_string)
+print("Finished syllables per second calculation")

@@ -4,3 +4,4 @@ numpy
 librosa
 pandas
 tabulate
+syllapy
